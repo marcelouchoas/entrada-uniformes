@@ -1,0 +1,54 @@
+Private Sub Worksheet_Activate()
+
+    Static verificado As Boolean
+    If verificado Then Exit Sub ' Já verificou uma vez, então não faz de novo
+
+    Dim ultimaLinha As Long
+    Dim i As Long, j As Long
+    Dim codigoMov As String, dataMov As Date, tipoMov As String
+    Dim encontrouEntrada As Boolean
+    Dim pendentes As String
+    Dim totalPendentes As Long
+
+    ultimaLinha = Me.Cells(Me.Rows.Count, 2).End(xlUp).Row ' Coluna B
+
+    ' Limpa formatações anteriores
+    Me.Range("A3:G" & ultimaLinha).Interior.ColorIndex = xlNone
+    totalPendentes = 0
+
+    For i = 3 To ultimaLinha
+        tipoMov = UCase(Trim(Me.Cells(i, 4).Value)) ' Coluna D = Tipo
+
+        If tipoMov = "SAIDA" Or tipoMov = "CONSERTO" Then
+            codigoMov = Me.Cells(i, 2).Value ' Coluna B = Código
+            dataMov = Me.Cells(i, 3).Value   ' Coluna C = Data
+            encontrouEntrada = False
+
+            ' Verifica se há uma ENTRADA do mesmo código após a data da SAÍDA ou CONSERTO
+            For j = i + 1 To ultimaLinha
+                If Me.Cells(j, 2).Value = codigoMov And _
+                   UCase(Trim(Me.Cells(j, 4).Value)) = "ENTRADA" And _
+                   Me.Cells(j, 3).Value > dataMov Then
+                    encontrouEntrada = True
+                    Exit For
+                End If
+            Next j
+
+            ' Se passaram mais de 15 dias e não voltou
+            If Not encontrouEntrada And Date - dataMov >= 15 Then
+                ' Destaca a linha da SAÍDA ou CONSERTO
+                Me.Rows(i).Interior.Color = RGB(255, 204, 204) ' Vermelho claro
+                ' Adiciona à lista de pendentes
+                pendentes = pendentes & vbCrLf & "- Código: " & codigoMov & " | Tipo: " & tipoMov & " | Data: " & Format(dataMov, "dd/mm/yyyy")
+                totalPendentes = totalPendentes + 1
+            End If
+        End If
+    Next i
+
+    If totalPendentes > 0 Then
+        MsgBox "Atenção! " & totalPendentes & " movimentação(ões) estão pendentes há mais de 15 dias sem retorno (ENTRADA):" & vbCrLf & pendentes, vbExclamation, "Pendências de Retorno"
+    End If
+
+    verificado = True ' Marca como verificado para não repetir
+
+End Sub
