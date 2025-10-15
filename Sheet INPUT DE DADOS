@@ -1,0 +1,170 @@
+Dim ModoAtivo As String ' "ENTRADA", "SAIDA", "CONSERTO" ou vazio ""
+
+ 
+Private Sub Worksheet_Change(ByVal Target As Range)
+ 
+    Const LIN_DEST        As Long = 3   'linha onde ficam os dados mais novos
+    Const COL_CODIGO      As Long = 2   'coluna B
+    Const COL_DATA        As Long = 3   'coluna C
+    Const COL_TIPO        As Long = 4   'coluna D
+    Const COL_PROCV1      As Long = 5   'coluna E
+    Const COL_PROCV2      As Long = 6   'coluna F
+    Const COL_NOTA        As Long = 7   'coluna G (esta é a coluna onde a NF do item será registrada)
+ 
+    Dim wsMov As Worksheet
+    Dim celInput As Range
+    Dim corFonte As Long, codigo As String, notaFiscal As String
+ 
+    Set celInput = Me.Range("C3")
+    If Intersect(Target, celInput) Is Nothing Then Exit Sub
+ 
+    Application.EnableEvents = False
+ 
+    codigo = Trim(celInput.Value)
+    ' Se não tiver código ou modo ativo, sai
+    If codigo = "" Or ModoAtivo = "" Then GoTo Saida
+ 
+    ' Verifica se a nota fiscal está ativa no novo "cantinho secreto" (A1 da MOVIMENTAÇÃO)
+    notaFiscal = Trim(ThisWorkbook.Sheets("MOVIMENTAÇÃO").Range("A1").Value) ' <<< ALTERADO AQUI
+    If notaFiscal = "" Then
+        MsgBox "Você precisa iniciar uma nota fiscal primeiro! Preencha C7 e clique em 'Iniciar'.", vbCritical
+        GoTo Saida
+    End If
+ 
+    Set wsMov = ThisWorkbook.Sheets("MOVIMENTAÇÃO")
+ 
+       
+    ' Define cor conforme o modo
+    Select Case ModoAtivo
+        Case "ENTRADA":  corFonte = RGB(0, 128, 0)
+        Case "SAIDA":    corFonte = RGB(255, 0, 0)
+        Case "CONSERTO": corFonte = RGB(255, 204, 0)
+        Case Else:       GoTo Saida
+    End Select
+ 
+    ' Verifica duplicidade na coluna B
+    If IsError(Application.Match(codigo, wsMov.Columns(COL_CODIGO), 0)) Then
+ 
+        ' Insere nova linha na linha 3
+        wsMov.Rows(LIN_DEST).Insert Shift:=xlDown
+        
+        wsMov.Rows(LIN_DEST).RowHeight = 15    ' ou 14.25, 16, etc — como preferir
+
+        ' Código
+        With wsMov.Cells(LIN_DEST, COL_CODIGO)
+            .Value = codigo
+            .Font.Color = corFonte
+            .Font.Bold = True
+            .HorizontalAlignment = xlCenter
+        End With
+ 
+        ' Data
+        wsMov.Cells(LIN_DEST, COL_DATA).Value = Date
+ 
+        ' Tipo
+        With wsMov.Cells(LIN_DEST, COL_TIPO)
+            .Value = UCase(ModoAtivo)
+            .Font.Color = corFonte
+            .Font.Bold = True
+            .HorizontalAlignment = xlCenter
+        End With
+ 
+        ' PROCVs
+        wsMov.Cells(LIN_DEST, COL_PROCV1).FormulaLocal = "=PROCV(B" & LIN_DEST & ";'BASE UNIFORMES'!$A$3:$G$254;4;0)"
+        wsMov.Cells(LIN_DEST, COL_PROCV2).FormulaLocal = "=PROCV(B" & LIN_DEST & ";'BASE UNIFORMES'!$A$3:$G$254;6;0)"
+ 
+        ' Nota Fiscal (coluna G) - Pega o valor do "cantinho secreto" (A1 da MOVIMENTAÇÃO)
+        With wsMov.Cells(LIN_DEST, COL_NOTA)
+            .Value = UCase(notaFiscal)
+            .Font.Color = RGB(0, 0, 128)
+            .Font.Bold = True
+            .HorizontalAlignment = xlCenter
+        End With
+ 
+    Else
+        MsgBox "Código já registrado na coluna B!", vbExclamation
+    End If
+ 
+
+Saida:
+    celInput.ClearContents
+    Me.Activate
+    celInput.Select
+    Application.EnableEvents = True
+
+End Sub
+ 
+Private Sub Worksheet_SelectionChange(ByVal Target As Range)
+    Dim wsMov As Worksheet
+    Set wsMov = ThisWorkbook.Sheets("MOVIMENTAÇÃO")
+ 
+    If Not Intersect(Target, Me.Range("C3")) Is Nothing Then
+        ' Verifica a nota fiscal ativa no novo "cantinho secreto" (A1 da MOVIMENTAÇÃO)
+        If Trim(wsMov.Range("A1").Value) = "" Then ' <<< ALTERADO AQUI
+            MsgBox "Antes de começar, registre a nota fiscal em C7 e clique em 'Iniciar'.", vbCritical
+            Application.EnableEvents = False
+            Me.Range("C3").ClearContents
+            Me.Range("C7").Select
+            Application.EnableEvents = True
+        End If
+    End If
+End Sub
+ 
+ 
+'=======================================
+'         BOTÕES DE ATIVAÇÃO
+'=======================================
+ 
+Sub IniciarNotaFiscal()
+    Dim codNota As String
+    codNota = Trim(Me.Range("C7").Value)
+ 
+    If codNota = "" Then
+        MsgBox "Por favor, preencha a célula C7 com o código da nota fiscal antes de iniciar.", vbExclamation
+        Exit Sub
+    End If
+ 
+    ' Apenas guarda a nota fiscal na célula A1 da aba MOVIMENTAÇÃO (novo cantinho!)
+    With ThisWorkbook.Sheets("MOVIMENTAÇÃO").Range("A1") ' <<< ALTERADO AQUI
+        .Value = UCase(codNota)
+        .Font.Bold = True
+        .Font.Color = RGB(0, 0, 128)
+    End With
+ 
+    MsgBox "Nota fiscal '" & UCase(codNota) & "' registrada com sucesso! Agora você pode usar os modos de entrada, saída ou conserto.", vbInformation
+    ' Opcional: Se você implementou, adicione aqui o código para habilitar seus botões de modo
+    ' Exemplo para ActiveX Controls:
+    ' Me.CommandButton1.Enabled = True ' Botão de Entrada
+    ' Me.CommandButton2.Enabled = True ' Botão de Saída
+    ' Me.CommandButton3.Enabled = True ' Botão de Conserto
+End Sub
+ 
+Sub AtivarModoEntrada()
+    If Not NotaFiscalAtiva Then Exit Sub
+    ModoAtivo = "ENTRADA"
+    MsgBox "Modo ENTRADA ativado! Digite os códigos na célula C3.", vbInformation
+End Sub
+ 
+Sub AtivarModoSAIDA()
+    If Not NotaFiscalAtiva Then Exit Sub
+    ModoAtivo = "SAIDA"
+    MsgBox "Modo SAÍDA ativado! Digite os códigos na célula C3.", vbInformation
+End Sub
+ 
+Sub AtivarModoCONSERTO()
+    If Not NotaFiscalAtiva Then Exit Sub
+    ModoAtivo = "CONSERTO"
+    MsgBox "Modo CONSERTO ativado! Digite os códigos na célula C3.", vbInformation
+End Sub
+ 
+Function NotaFiscalAtiva() As Boolean
+    Dim nf As String
+    ' Verifica a nota fiscal ativa no novo "cantinho secreto" (A1 da MOVIMENTAÇÃO)
+    nf = Trim(ThisWorkbook.Sheets("MOVIMENTAÇÃO").Range("A1").Value) ' <<< ALTERADO AQUI
+    If nf = "" Then
+        MsgBox "Antes de continuar, registre a nota fiscal em C7 e clique em 'Iniciar'.", vbCritical
+        NotaFiscalAtiva = False
+    Else
+        NotaFiscalAtiva = True
+    End If
+End Function
